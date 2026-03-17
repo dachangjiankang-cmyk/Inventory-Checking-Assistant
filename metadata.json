@@ -1,0 +1,7 @@
+{
+  "name": "藥局盤點核對助理",
+  "description": "專業高效率的庫存盤點工具，支援照片辨識系統畫面與條碼，自動計算盤差並產出結構化報表。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
