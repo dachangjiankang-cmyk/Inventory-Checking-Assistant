@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { 
   Camera, 
   Upload, 
@@ -30,8 +29,6 @@ interface InventoryItem {
   actualStock: number | '待盤點';
   result: string;
 }
-
-const GEMINI_MODEL = "gemini-3-flash-preview";
 
 export default function App() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -101,55 +98,19 @@ export default function App() {
 
   const processImage = async (base64Data: string, mode: 'system' | 'barcode') => {
     try {
-      // 每次辨識時重新初始化，確保抓取到最新的環境變數
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('找不到 API Key，請確保已在 Secrets 中設定 GEMINI_API_KEY');
-      }
-      
-      const aiInstance = new GoogleGenAI({ apiKey });
-      
-      const prompt = mode === 'system' 
-        ? `你是一個專業的盤點助理。請從這張「庫存系統螢幕照片」中精準辨識所有商品列。
-           
-           視覺結構說明：
-           - 畫面中央有一個表格，包含多行商品資料。
-           - 第一欄 (商品代號)：長串數字或代碼 (例如：8710428009609, AC40358345)。
-           - 第三欄 (品名)：商品的中文名稱，可能包含符號如 $ 或 ** (例如：$亞培倍力素...)。
-           - 第七欄 (庫存量)：數字，可能包含小數點或負號 (例如：-5.0, 546.0, 22.0)。
-           
-           請擷取畫面上「所有」有效的商品列。
-           請以 JSON 格式回傳，格式如下：
-           [{"code": "條碼數字", "name": "品名文字", "systemStock": 數字}]
-           
-           注意事項：
-           1. 庫存量請轉換為純數字 (例如 -5.0 轉為 -5)。
-           2. 請忽略庫存與品名皆為空的空白預設列。
-           3. 務必精確對應欄位，不要錯位。
-           4. 如果完全辨識不到有效商品，請回傳空陣列 []。`
-        : `你是一個專業的盤點助理。請從這張「實體商品條碼照片」中辨識條碼數字。
-           請以 JSON 格式回傳，格式如下：
-           {"code": "條碼數字"}
-           如果辨識不到，請回傳空物件。`;
-
-      const response = await aiInstance.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-          ]
-        }],
-        config: {
-          responseMimeType: "application/json"
-        }
+      const response = await fetch('/api/process-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Data, mode })
       });
 
-      if (!response.candidates?.[0]) {
-        throw new Error('AI 未能產生回應，請確保照片清晰且內容不具敏感性');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '伺服器辨識失敗');
       }
 
-      let resultText = response.text || (mode === 'system' ? '[]' : '{}');
+      const result = await response.json();
+      let resultText = result.text || (mode === 'system' ? '[]' : '{}');
       // 移除可能存在的 Markdown 標記
       resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       
@@ -453,7 +414,7 @@ export default function App() {
 
         {/* Version Number */}
         <div className="mt-8 pb-4 text-center text-xs text-gray-400">
-          Version 1.2
+          Version 1.3
         </div>
       </div>
     </div>
