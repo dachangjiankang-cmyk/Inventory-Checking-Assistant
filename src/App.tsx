@@ -434,6 +434,11 @@ export default function App() {
             <p>輸入「實際盤點」數量後，系統會自動計算誤差並更新盤點結果。</p>
           </div>
         </footer>
+
+        {/* Version Number */}
+        <div className="mt-8 pb-4 text-center text-xs text-gray-400">
+          Version 1.0
+        </div>
       </div>
     </div>
   );
