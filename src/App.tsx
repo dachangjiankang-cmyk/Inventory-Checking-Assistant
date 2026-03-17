@@ -31,7 +31,7 @@ interface InventoryItem {
   result: string;
 }
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 
 export default function App() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -453,7 +453,7 @@ export default function App() {
 
         {/* Version Number */}
         <div className="mt-8 pb-4 text-center text-xs text-gray-400">
-          Version 1.1
+          Version 1.2
         </div>
       </div>
     </div>
