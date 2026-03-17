@@ -106,19 +106,21 @@ export default function App() {
     try {
       const prompt = mode === 'system' 
         ? `你是一個專業的盤點助理。請從這張「庫存系統螢幕照片」中精準辨識所有商品列。
-           根據使用者提供的欄位資訊：
-           - 第一欄：商品代號 (國際條碼)
-           - 第三欄：品名 (商品名稱)
-           - 第七欄：庫存量 (電腦庫存量)
            
-           請擷取畫面上「所有」非空白的商品列。
+           視覺結構說明：
+           - 畫面中央有一個表格，包含多行商品資料。
+           - 第一欄 (商品代號)：長串數字或代碼 (例如：8710428009609, AC40358345)。
+           - 第三欄 (品名)：商品的中文名稱，可能包含符號如 $ 或 ** (例如：$亞培倍力素...)。
+           - 第七欄 (庫存量)：數字，可能包含小數點或負號 (例如：-5.0, 546.0, 22.0)。
+           
+           請擷取畫面上「所有」有效的商品列。
            請以 JSON 格式回傳，格式如下：
            [{"code": "條碼數字", "name": "品名文字", "systemStock": 數字}]
            
            注意事項：
-           1. 請忽略庫存量為 0 且品名為空的預設空白列。
-           2. 條碼通常是純數字，請完整擷取。
-           3. 品名若包含括號或規格請一併擷取。
+           1. 庫存量請轉換為純數字 (例如 -5.0 轉為 -5)。
+           2. 請忽略庫存與品名皆為空的空白預設列。
+           3. 務必精確對應欄位，不要錯位。
            4. 如果完全辨識不到有效商品，請回傳空陣列 []。`
         : `你是一個專業的盤點助理。請從這張「實體商品條碼照片」中辨識條碼數字。
            請以 JSON 格式回傳，格式如下：
@@ -138,33 +140,46 @@ export default function App() {
         }
       });
 
-      const resultText = response.text || '[]';
+      let resultText = response.text || (mode === 'system' ? '[]' : '{}');
+      // 移除可能存在的 Markdown 標記
+      resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(resultText);
 
       if (mode === 'system') {
-        const newItems: InventoryItem[] = (parsed as any[]).map(item => ({
+        const data = Array.isArray(parsed) ? parsed : [];
+        const newItems: InventoryItem[] = data.map(item => ({
           id: Math.random().toString(36).substr(2, 9),
-          code: item.code || '',
-          name: item.name || '',
-          systemStock: Number(item.systemStock) || 0,
+          code: String(item.code || ''),
+          name: String(item.name || ''),
+          systemStock: item.systemStock !== undefined ? Number(item.systemStock) : '待盤點',
           actualStock: '待盤點',
           result: '待盤點'
         }));
-        setItems(prev => [...prev, ...newItems]);
+        
+        if (newItems.length > 0) {
+          setItems(prev => [...prev, ...newItems]);
+        } else {
+          setError('未能辨識到有效商品列，請確保照片清晰且包含欄位標題');
+        }
       } else {
-        const newItem: InventoryItem = {
-          id: Math.random().toString(36).substr(2, 9),
-          code: parsed.code || '',
-          name: '',
-          systemStock: '待盤點',
-          actualStock: '待盤點',
-          result: '待盤點'
-        };
-        setItems(prev => [...prev, newItem]);
+        const code = parsed.code || '';
+        if (code) {
+          const newItem: InventoryItem = {
+            id: Math.random().toString(36).substr(2, 9),
+            code: String(code),
+            name: '',
+            systemStock: '待盤點',
+            actualStock: '待盤點',
+            result: '待盤點'
+          };
+          setItems(prev => [...prev, newItem]);
+        } else {
+          setError('未能辨識到條碼，請重新拍攝');
+        }
       }
     } catch (err) {
       console.error(err);
-      setError('AI 辨識失敗，請重試或手動輸入');
+      setError('AI 辨識過程發生錯誤，請重試');
     } finally {
       setIsProcessing(false);
     }
