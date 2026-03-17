@@ -31,7 +31,7 @@ interface InventoryItem {
   result: string;
 }
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 export default function App() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -40,9 +40,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadMode, setUploadMode] = useState<'system' | 'barcode'>('system');
-
-  // Initialize Gemini
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
   const calculateResult = (system: number | '待盤點', actual: number | '待盤點'): string => {
     if (system === '待盤點' || actual === '待盤點') return '待盤點';
@@ -104,6 +101,14 @@ export default function App() {
 
   const processImage = async (base64Data: string, mode: 'system' | 'barcode') => {
     try {
+      // 每次辨識時重新初始化，確保抓取到最新的環境變數
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('找不到 API Key，請確保已在 Secrets 中設定 GEMINI_API_KEY');
+      }
+      
+      const aiInstance = new GoogleGenAI({ apiKey });
+      
       const prompt = mode === 'system' 
         ? `你是一個專業的盤點助理。請從這張「庫存系統螢幕照片」中精準辨識所有商品列。
            
@@ -127,7 +132,7 @@ export default function App() {
            {"code": "條碼數字"}
            如果辨識不到，請回傳空物件。`;
 
-      const response = await ai.models.generateContent({
+      const response = await aiInstance.models.generateContent({
         model: GEMINI_MODEL,
         contents: [{
           parts: [
@@ -140,10 +145,21 @@ export default function App() {
         }
       });
 
+      if (!response.candidates?.[0]) {
+        throw new Error('AI 未能產生回應，請確保照片清晰且內容不具敏感性');
+      }
+
       let resultText = response.text || (mode === 'system' ? '[]' : '{}');
       // 移除可能存在的 Markdown 標記
       resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(resultText);
+      
+      let parsed;
+      try {
+        parsed = JSON.parse(resultText);
+      } catch (e) {
+        console.error('JSON Parse Error:', resultText);
+        throw new Error('AI 回傳格式錯誤，請再試一次');
+      }
 
       if (mode === 'system') {
         const data = Array.isArray(parsed) ? parsed : [];
@@ -177,9 +193,9 @@ export default function App() {
           setError('未能辨識到條碼，請重新拍攝');
         }
       }
-    } catch (err) {
-      console.error(err);
-      setError('AI 辨識過程發生錯誤，請重試');
+    } catch (err: any) {
+      console.error('AI Processing Error:', err);
+      setError(`辨識失敗: ${err.message || '未知錯誤'}`);
     } finally {
       setIsProcessing(false);
     }
@@ -437,7 +453,7 @@ export default function App() {
 
         {/* Version Number */}
         <div className="mt-8 pb-4 text-center text-xs text-gray-400">
-          Version 1.0
+          Version 1.1
         </div>
       </div>
     </div>
